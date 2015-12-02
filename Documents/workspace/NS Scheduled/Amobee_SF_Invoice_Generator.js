@@ -102,8 +102,6 @@ function invGenerator(type) {
 	
 			
 			
-			
-			
 			if (campId && campId != '') {
 				Util.console.log(campId, 'campId');
 				var invId = getCreatedInv(campId, trandate);
