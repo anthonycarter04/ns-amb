@@ -11,7 +11,7 @@
  * @returns {Void}
  */
 
-
+//Comment script starter
 function scriptStarter() {
 	Util.console.log('running');
 	var exec = nlapiGetFieldValue('custrecord_ss_starter_execute');
@@ -32,6 +32,8 @@ function scriptStarter() {
 	
 }
 
+
+//Comment queue the deploys
 function queueTheDeploys(type) {
 	
 		
