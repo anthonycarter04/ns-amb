@@ -18,7 +18,7 @@ function sGen(type) {
 		
 		for (var i=0; i<1 /*cust.length*/; i++) {
 			
-			var custId = cust[i].getId();
+			var custId = cust[i].getValue('internalid', 'customer' ,'group');
 			if (custId && custId != '') {
 				
 				Util.console.log(custId, 'custId');
@@ -60,13 +60,13 @@ function genStatement(sInfo) {
 	pdfbody += '<p align="right">Customer: '+ sInfo['cust'] + '</p>';
 	pdfbody += '<p align="right">Date: ' + date + '</p>';
 	pdfbody += '<p align="right">Amount Due: ' + accounting.formatNumber(sInfo['balance'],2) + '</p>';
-	pdfbody += '<table class="itemtable"><thead><tr><th align="left" colspan="3">Invoice</th><th colspan="1">Date</th><th colspan="1">Amount Remaining</th><th align="left" colspan="1">Balance</th></tr></thead>';
+	pdfbody += '<table class="itemtable"><thead><tr><th align="left" colspan="2">Invoice</th><th colspan="1">Date</th><th colspan="1">Amount Remaining</th><th align="left" colspan="1">Balance</th></tr></thead>';
 	
 	Util.console.log()
 	for (var i=0;i<sInfo['inv'].length;i++) {
 		
 		pdfbody += '<tr>';
-		pdfbody += '<td align="left" colspan="3">' + sInfo['inv'][i]['num'] + '</td>';
+		pdfbody += '<td align="left" colspan="2">' + sInfo['inv'][i]['num'] + '</td>';
 		pdfbody += '<td align="left" colspan="1">' + sInfo['inv'][i]['date'] + '</td>';
 		pdfbody += '<td align="left" colspan="1">' + accounting.formatNumber(sInfo['inv'][i]['amtrem'],2) + '</td>';
 		pdfbody += '<td align="left" colspan="1">' + accounting.formatNumber(sInfo['inv'][i]['bal'],2) + '</td>';
