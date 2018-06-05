@@ -66,7 +66,7 @@ var init = function(){
       }
       break;
   }
-  // nlapiLogExecution('debug', 'env', env + ', suitelet' + INVOICE_SUITELET_ID + ', baseDomain' + BASE_DOMAIN);
+  //  nlapiLogExecution('debug', 'env', env + ', suitelet' + INVOICE_SUITELET_ID + ', baseDomain' + BASE_DOMAIN);
 };
 
 init();
@@ -86,6 +86,26 @@ function openWindow(url, dimensions){
   return newWindow;
 }
 
+function getEin(subsidiary){
+	
+var vatNumber =null;
+var filters = new Array();
+filters[0] = new nlobjSearchFilter('internalid', null, 'anyof', subsidiary);
+var columns = new Array();
+columns[0] = new nlobjSearchColumn( 'taxidnum' );
+//columns[0] = new nlobjSearchColumn( 'federalidnumber' );
+var searchResults = nlapiSearchRecord('subsidiary', null, filters, columns); 
+
+if (searchResults && searchResults != '') {
+	var ein_num = searchResults[0].getValue('taxidnum');
+	if (ein_num && ein_num != ''){
+	vatNumber=ein_num
+	}
+	  
+  }
+return vatNumber;	
+	
+}
 function invoiceSuitelet(req, res) {
   nlapiLogExecution("DEBUG", "Inside suitelet", req);
   action       = req.getParameter('action');
@@ -109,8 +129,10 @@ function invoiceSuitelet(req, res) {
   salesorderid = req.getParameter('salesorderid');
   fulfillmentid = req.getParameter('fulfillmentid');
   nlapiLogExecution("DEBUG", "sales order id: ", salesorderid);
+  nlapiLogExecution("DEBUG", "fulfillment id: ", fulfillmentid);
   var nativeFulfillment = null;
-
+  var fulfillmentRecord = null;
+  var orderType=null;
   var created_From =  nlapiLookupField('transaction',salesorderid,'type');//*
 
   if(rectype=='itemfulfillment' && created_From == 'TrnfrOrd') //*
@@ -121,11 +143,16 @@ function invoiceSuitelet(req, res) {
   else if(rectype=='itemfulfillment' && created_From == 'SalesOrd'){  //*
 		salesOrderRecord = nlapiLoadRecord('salesorder', salesorderid);
 		nativeFulfillment = nlapiLoadRecord('itemfulfillment', fulfillmentid);
+		orderType = salesOrderRecord.getFieldValue('custbody_tno_order_type');
 
   }
   else
   {
 	fulfillmentRecord = nlapiLoadRecord('customrecord_custom_fulfillment', fulfillmentid);
+	var commerceFulfillmentId = fulfillmentRecord.getFieldValue('custrecord_native_fulfillment');
+	if (commerceFulfillmentId) {
+		var commerceFulfillment = nlapiLoadRecord('itemfulfillment', commerceFulfillmentId);
+	}
 	salesOrderRecord = nlapiLoadRecord('salesorder', salesorderid);
 	nlapiLogExecution("DEBUG", "fulfillmentid id: ", fulfillmentid);
 	customerId = salesOrderRecord.getFieldValue('custbody_bill_customer'); // nlapiLookupField('customrecord_custom_fulfillment', fulfillmentid, 'custrecord_customer');
@@ -139,10 +166,25 @@ function invoiceSuitelet(req, res) {
 	printAMS = (custFields.custentity_print_ams_comm_invoice == 'T');
 	nlapiLogExecution('DEBUG','printAMS',custFields);
   }
+  else if(rectype=='itemfulfillment' && created_From == 'TrnfrOrd'){
+	  
+var subsidiary_from_order=nativeFulfillment.getFieldValue('subsidiary');
+vatNumber=getEin(subsidiary_from_order);
+  }
   else {
     vatNumber = "";
   }
-	nlapiLogExecution('DEBUG','printAMS','value: ' + printAMS);
+  nlapiLogExecution('DEBUG','orderType','value: ' + orderType);
+  if(rectype=='itemfulfillment' && created_From == 'SalesOrd' && orderType == 9){
+	  
+	 var subsidiary_from_order=nativeFulfillment.getFieldValue('subsidiary');
+	 vatNumber=getEin(subsidiary_from_order);
+
+  }
+  
+	
+
+nlapiLogExecution('DEBUG','printAMS','value: ' + printAMS);
 
 // change formatting for date
   var months = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
@@ -164,7 +206,7 @@ function invoiceSuitelet(req, res) {
 	var locid = nativeFulfillment.getLineItemValue('item','location',1);
 	nlapiLogExecution('DEBUG','location',locid);
 	locationRecord = nlapiLoadRecord('location',locid);
-	
+
   }
   else
   {
@@ -174,9 +216,9 @@ function invoiceSuitelet(req, res) {
 	  var salesOrderLineNumber = salesOrderRecord.findLineItemValue('item', 'line', lineNumber);
 	  var salesOrderLocation = salesOrderRecord.getLineItemValue('item', 'location', salesOrderLineNumber);
 	  locationRecord = nlapiLoadRecord('location', salesOrderLocation);
-	  
+
   }
-  var shipper = 'Lifesize, Inc.</p><p>1601 S MoPac Expway</p><p>Austin, TX 78746</p><p>USA';
+  var shipper = 'Lifesize, Inc.</p><p>1601 S. MoPac Expressway</p><p>Suite 100</p><p>Austin, TX 78746</p><p>US';
   var title = '';
   var shipto = '';
   var ship_cust_Id = salesOrderRecord.getFieldValue('custbody_ship_to_customer');
@@ -196,16 +238,16 @@ billAddrLine4 = getAddrLine4(bill_Cust_Id,bill_address_Id);
 
 }
 catch(e){
-	
+
 }
  // if(salesOrderRecord.getFieldValue('shipattention')) shipto += salesOrderRecord.getFieldValue('shipattention') + '<br/>';
-  if(salesOrderRecord.getFieldValue('shipaddressee')) shipto += salesOrderRecord.getFieldValue('shipaddressee') + '<br/>';
+ if(salesOrderRecord.getFieldValue('shipaddressee')) shipto += salesOrderRecord.getFieldValue('shipaddressee') + '<br/>';
   if(salesOrderRecord.getFieldValue('shipaddr1')) shipto += salesOrderRecord.getFieldValue('shipaddr1') + '<br/>';
   if(salesOrderRecord.getFieldValue('shipaddr2')) shipto += salesOrderRecord.getFieldValue('shipaddr2') + '<br/>';
    if(salesOrderRecord.getFieldValue('shipaddr3')) shipto += salesOrderRecord.getFieldValue('shipaddr3') + '<br/>';
   if(shipAddrLine4) shipto += shipAddrLine4  + '<br/>';
-  if(salesOrderRecord.getFieldValue('shipcity')) shipto += salesOrderRecord.getFieldValue('shipcity') + ' ';
-  if(salesOrderRecord.getFieldValue('shipstate')) shipto += ', ' + salesOrderRecord.getFieldValue('shipstate') + ' ';
+  if(salesOrderRecord.getFieldValue('shipcity')) shipto += salesOrderRecord.getFieldValue('shipcity') + ', ';
+  if(salesOrderRecord.getFieldValue('shipstate')) shipto += salesOrderRecord.getFieldValue('shipstate') + ' ';
   if(salesOrderRecord.getFieldValue('shipzip')) shipto += salesOrderRecord.getFieldValue('shipzip') + ' ';
   if(salesOrderRecord.getFieldValue('shipcountry')) shipto += '<br/>' + salesOrderRecord.getFieldValue('shipcountry') + ' ';
 
@@ -216,8 +258,8 @@ catch(e){
   if(salesOrderRecord.getFieldValue('billaddr2')) billto += salesOrderRecord.getFieldValue('billaddr2') + '<br/>';
      if(salesOrderRecord.getFieldValue('billaddr3')) billto += salesOrderRecord.getFieldValue('billaddr3') + '<br/>';
    if(billAddrLine4) billto += billAddrLine4 + '<br/>';
-  if(salesOrderRecord.getFieldValue('billcity')) billto += salesOrderRecord.getFieldValue('billcity') + ' ';
-  if(salesOrderRecord.getFieldValue('billstate')) billto += ', ' + salesOrderRecord.getFieldValue('billstate') + ' ';
+  if(salesOrderRecord.getFieldValue('billcity')) billto += salesOrderRecord.getFieldValue('billcity') + ', ';
+  if(salesOrderRecord.getFieldValue('billstate')) billto += salesOrderRecord.getFieldValue('billstate') + ' ';
   if(salesOrderRecord.getFieldValue('billzip')) billto += salesOrderRecord.getFieldValue('billzip') + ' ';
   if(salesOrderRecord.getFieldValue('billcountry')) billto += '<br/>' + salesOrderRecord.getFieldValue('billcountry') + ' ';
 
@@ -227,9 +269,9 @@ catch(e){
   if(locationRecord.getFieldValue('addr2')) shipfrom += locationRecord.getFieldValue('addr2') + '</br>';
   if(locationRecord.getFieldValue('addr3')) shipfrom += locationRecord.getFieldValue('addr3') + '</br>';
   if(shipFromLine4) shipfrom += shipFromLine4 + '</br>';
-  
-  if(locationRecord.getFieldValue('city')) shipfrom += locationRecord.getFieldValue('city') + ' ';
-  if(locationRecord.getFieldValue('state')) shipfrom += ', ' + locationRecord.getFieldValue('state') + ' ';
+
+  if(locationRecord.getFieldValue('city')) shipfrom += locationRecord.getFieldValue('city') + ', ';
+  if(locationRecord.getFieldValue('state')) shipfrom += locationRecord.getFieldValue('state') + ' ';
   if(locationRecord.getFieldValue('zip')) shipfrom += locationRecord.getFieldValue('zip') + ' ';
   if(locationRecord.getFieldValue('country')) shipfrom += '<br/>' + locationRecord.getFieldValue('country') + '</p>';;
 
@@ -286,13 +328,63 @@ catch(e){
 	var totalQuantity = 0;
 	var totalValue = 0;
 	var itemDesc;
-	
+
 			var itemHTSCode='';
 		var eCCNNumber='';
 		var countryOfOrigin = '';
 
-	
+
 	var custcolLines = [];
+	
+	// Loop through lines to get all item ids for search/lookup
+	var itemIds = [];
+	var itemLookupObj = {};
+	for (var i = 1; i <= numLines; i++) {
+		var itemId = salesOrderRecord.getLineItemValue('item','item',i);
+		if (itemIds.indexOf(itemId) == -1) {
+			itemIds.push(itemId);
+		}
+	}
+	if(fulfillmentRecord){
+		var fulfillLines = fulfillmentRecord.getLineItemCount('custpage_serialnumber_sublist');
+		for (var i = 1; i <= fulfillLines; i++) {
+			var itemId = fulfillmentRecord.getLineItemValue('custpage_serialnumber_sublist','assyitem',i);
+			if (itemIds.indexOf(itemId) == -1) {
+				itemIds.push(itemId);
+			}
+			
+			var itemId = fulfillmentRecord.getLineItemValue('custpage_serialnumber_sublist','component',i);
+			if (itemIds.indexOf(itemId) == -1) {
+				itemIds.push(itemId);
+			}
+		}
+	}
+	//nlapiLogExecution('debug', 'Item Ids', itemIds);
+	
+	// Build and run search for lookups
+	var filters = [];
+	filters.push(new nlobjSearchFilter('internalid', '', 'anyof', itemIds));
+	var columns = [];
+	columns.push(new nlobjSearchColumn('itemid'));
+	columns.push(new nlobjSearchColumn('custitem_tariff_code'));
+	columns.push(new nlobjSearchColumn('custitem_eccn_number'));
+	columns.push(new nlobjSearchColumn('custitem_country_of_origin'));
+	columns.push(new nlobjSearchColumn('description'));
+	var searchItems = nlapiSearchRecord('item',null,filters,columns);
+	
+	for(var i = 0; searchItems != null && i < searchItems.length; i++){
+		var result = searchItems[i];
+		var itemId = result.getId();
+		var name = result.getValue('itemid');
+		var tariff = result.getValue('custitem_tariff_code');
+		var eccn = result.getValue('custitem_eccn_number');
+		var origin = result.getText('custitem_country_of_origin');
+		var desc = result.getValue('description');
+		
+		itemLookupObj[itemId] = {name: name, tariff: tariff, eccn: eccn, origin: origin, desc: desc};
+	}
+	nlapiLogExecution('debug', 'itemLookupObj', JSON.stringify(itemLookupObj));
+	
 	for (var i = 1; i <= numLines; i++) {
 
 	  var itemType = salesOrderRecord.getLineItemValue('item','custcol_item_type',i);
@@ -310,12 +402,12 @@ catch(e){
 	  itemText = salesOrderRecord.getLineItemText('item', 'item', i);
 	  itemDesc = salesOrderRecord.getLineItemValue('item', 'description', i);
 
-			var item_Lookup = nlapiLookupField('item',itemId,['custitem_tariff_code','custitem_eccn_number']);
-		  var itemTextLookUpCountry_Origin = nlapiLookupField('item', itemId, 'custitem_country_of_origin', true);
-		  itemHTSCode = item_Lookup.custitem_tariff_code;
-		  eCCNNumber = item_Lookup.custitem_eccn_number;
-		  countryOfOrigin = itemTextLookUpCountry_Origin;
-		  
+			//var item_Lookup = nlapiLookupField('item',itemId,['custitem_tariff_code','custitem_eccn_number']);
+		  //var itemTextLookUpCountry_Origin = nlapiLookupField('item', itemId, 'custitem_country_of_origin', true);
+		  itemHTSCode = itemLookupObj[itemId].tariff;//item_Lookup.custitem_tariff_code;
+		  eCCNNumber = itemLookupObj[itemId].eccn;//item_Lookup.custitem_eccn_number;
+		  countryOfOrigin = itemLookupObj[itemId].origin; //itemTextLookUpCountry_Origin;
+
 		  //new block added to get itemHTSCode, eccNNumber, countryOfOrigin from component instead of item, for internal RMA and RAM order type
 		  if((salesOrderRecord.getFieldValue('custbody_tno_order_type')==ORDER_TYPE_RMA || salesOrderRecord.getFieldValue('custbody_tno_order_type')== INTERNAL_RMA_SALES_ORDER_TYPE) && rectype != 'itemfulfillment')
 			  {
@@ -323,17 +415,13 @@ catch(e){
 			  var RMACompId = fulfillmentRecord.getLineItemValue('custpage_serialnumber_sublist', 'component', fulLineID);
 			  nlapiLogExecution('DEBUG', 'filfil line id', fulLineID);
 			  nlapiLogExecution('DEBUG', 'RMACompId', RMACompId);
-				var item_LookupRMA = nlapiLookupField('item',RMACompId,['custitem_tariff_code','custitem_eccn_number']);
-				  var itemTextLookUpCountry_OriginRMA = nlapiLookupField('item', RMACompId, 'custitem_country_of_origin', true);
-				  itemHTSCode = item_LookupRMA.custitem_tariff_code;
-				  eCCNNumber = item_LookupRMA.custitem_eccn_number;
-				  countryOfOrigin = itemTextLookUpCountry_OriginRMA;
-			  
-			  
-
-			  
+				//var item_LookupRMA = nlapiLookupField('item',RMACompId,['custitem_tariff_code','custitem_eccn_number']);
+				  //var itemTextLookUpCountry_OriginRMA = nlapiLookupField('item', RMACompId, 'custitem_country_of_origin', true);
+				  itemHTSCode = itemLookupObj[RMACompId].tariff;  //item_LookupRMA.custitem_tariff_code;
+				  eCCNNumber = itemLookupObj[RMACompId].eccn;  //item_LookupRMA.custitem_eccn_number;
+				  countryOfOrigin = itemLookupObj[RMACompId].origin;  //itemTextLookUpCountry_OriginRMA;
 			  }
-	  
+
 	  //itemDesc = nlapiLookupField('item',itemId,'displayname');
 	  if(salesOrderRecord.getFieldValue('custbody_tno_order_type')==ORDER_TYPE_RMA)
 	  {
@@ -346,28 +434,23 @@ catch(e){
 		else
 		{
 			itemId = data[0].component;
-			rmaItemFields = nlapiLookupField('item',itemId,['name','description']);
-			itemText = rmaItemFields.name;
-			itemDesc = rmaItemFields.description;
+			//rmaItemFields = nlapiLookupField('item',itemId,['name','description']);
+			itemText = itemLookupObj[itemId].name;  //rmaItemFields.name;
+			itemDesc = itemLookupObj[itemId].desc;  //rmaItemFields.description;
 		}
 		nlapiLogExecution('DEBUG','RMA Order',itemId);
 	  }
 	  var serials = [];
 	  var itemfound = false;
 	  nlapiLogExecution('DEBUG','sales order line',salesOrderRecord.getLineItemValue('item','line',i));
-	  	
+
 	  // first find all unique serial numbers (for serialized components)
 	    if(rectype=='itemfulfillment')
 		{
-	    	Util.console.log(data[i-1], 'data i - 1');
-	    //if (data[i-1] === undefined || data[i-1].length == 0) {Util.console.log('in undefined or empty')}
-	    	if(data[i-1] != null) 
-	    		serials.push(data[i-1]);
-	    		itemfound = true;
-	    		nlapiLogExecution('DEBUG','serials itemfulfillment',JSON.stringify(serials));
-	    	
-    		
-
+	    	if(data[i-1] != null)
+			serials.push(data[i-1]);
+			itemfound = true;
+			nlapiLogExecution('DEBUG','serials itemfulfillment',JSON.stringify(serials));
 		}
 		else
 		{
@@ -433,34 +516,12 @@ catch(e){
 
 		if(itemfound)
 		{
-			var orderType = salesOrderRecord.getFieldValue('custbody_tno_order_type');
+      var orderType = salesOrderRecord.getFieldValue('custbody_tno_order_type');
 			var hasserial = serials.length>0;
-			
 			var quantity = salesOrderRecord.getLineItemValue('item', 'quantity', i);
 			nlapiLogExecution('DEBUG','quantity',quantity);
 			var amount = salesOrderRecord.getLineItemValue('item', 'amount', i);
-			var rate = salesOrderRecord.getLineItemValue('item', 'rate', i);
-			
-			//AC BIZ-543 Bundle Support
-			var groupParent = salesOrderRecord.getLineItemValue('item', 'custcol_group_parent', i);
-			Util.console.log(groupParent, 'groupParent');
-			if (groupParent && groupParent != '') {
-				amount = 0;
-				rate = 0;
-				for (var j=i; j<= numLines; j++) {
-					var itemName = salesOrderRecord.getLineItemValue('item', 'item', j);
-					
-					if (itemName == 0 || itemName == '0') { //i.e End of Group or "None"
-						break;
-					} else {
-						amount += parseFloat(salesOrderRecord.getLineItemValue('item', 'amount', j));
-						rate += parseFloat(salesOrderRecord.getLineItemValue('item', 'rate', j));
-					}
-				}
-			}
-			//END AC BIZ-543 Support
-			
-			
+      var rate = salesOrderRecord.getLineItemValue('item', 'rate', i);
 			var rmarate = 400;
 //var INTERNAL_SALES_ORDER_TYPE = '1';
 //var INTERNAL_RMA_SALES_ORDER_TYPE = '6';
@@ -521,7 +582,7 @@ catch(e){
 		  // }
 
 			//var itemfields = getItemInfo(dataItemIds);
-			nlapiLogExecution('DEBUG', 'item fields', JSON.stringify(itemfields));
+			//nlapiLogExecution('DEBUG', 'item fields', JSON.stringify(itemfields));
 
 			for(var s=0; s<serials.length; s++)
 			{
@@ -549,7 +610,7 @@ catch(e){
 				}
 				else
 				{
-					var itemfields = nlapiLookupField('item',serials[s].component,['name','custitem_eccn_number','custitem_tariff_code','custitem_country_of_origin']);
+					//var itemfields = nlapiLookupField('item',serials[s].component,['name','custitem_eccn_number','custitem_tariff_code','custitem_country_of_origin']);
 					var countryoforigin = serials[s].countryoforigin;
 					if(salesOrderRecord.getLineItemValue('item','custcol_service_ref_type',i)==SERVICE_REF_AMS_CURRENT)
 					{
@@ -559,16 +620,20 @@ catch(e){
 							if(salesOrderRecord.getLineItemValue('item','custcol_line_id',l)==refLine)
 							{
 								var relatedItem = salesOrderRecord.getLineItemValue('item','item',l);
-								countryoforigin = nlapiLookupField('item',relatedItem,'custitem_country_of_origin',true);
+								countryoforigin = itemLookupObj[relatedItem].origin;
+								// Commenting out logic, does not appear to be used (JM)
+								/*
+								//nlapiLookupField('item',relatedItem,'custitem_country_of_origin',true);
 								itemfields2 = nlapiLookupField('item',relatedItem,['name','custitem_tariff_code','custitem_country_of_origin']);
 								itemfields2.custitem_eccn_number = itemfields.custitem_eccn_number;
 								itemfields = itemfields2;
+								*/
 								break;
 							}
 						}
 					}
 
-					nlapiLogExecution('DEBUG', 'Item Text / Desc', itemfields.name + '  /  ' + serials[s].componentdescription);
+					//nlapiLogExecution('DEBUG', 'Item Text / Desc', itemfields.name + '  /  ' + serials[s].componentdescription);
 					lineItemHtml += '<tr><td>' + serials[s].qtypicked +
 					'</td><td><p>' + itemText + '</p><p>' + itemDesc +
 					//'</p><p>Country of Origin: '+ countryoforigin +
@@ -577,15 +642,15 @@ catch(e){
 					'</p><p>Country of Origin: '+ countryOfOrigin +
 						'</p><p>ECCN Number: '+ eCCNNumber +
 						'</p><p>HTS Code: '+ itemHTSCode;
-						
-					
-					
-					
-					
+
+
+
+
+
 					if(serials)
 					if(serials[s]!='' && serials[s].assyserialnumber && serials[s].assyserialnumber!='Not Required')
 					{
-						
+
 						nlapiLogExecution('ERROR', 'serials[s]', JSON.stringify(serials));
 						if(serials[s].assypartnum == 'RMA Default Assembly'){
 							lineItemHtml += '</p><p>Serial #: '+ serials[s].serialnumber;
@@ -609,12 +674,12 @@ catch(e){
 						else{
 							var contact = salesOrderRecord.getFieldText('custbody_ship_to_contact');
 							var contactStr = contact;
-						
+
 							if(contactStr.indexOf(':')>-1){
 								contact = contact.split(':');
 								contactStr = contact[1];
 							}
-							
+
 							lineItemHtml += '<td>' + contactStr + '</td>';
 						}
 					}
@@ -731,7 +796,15 @@ if(action=='russian_invoice')
 			<div id="ship-to"><p>Ship To:</p>' + '<br/>' + '<p>' + nullCheck(shipto) + '</p></div>';
 		if(nativeFulfillment)
 		{
-			html += '<div id="bill-to"><p>Ship To Contact:</p>' + '<br/>' + '<p>' + nullCheck(locationRecord.getFieldValue('custrecord_ship_to_contact_info')) + '</p></div>';
+			if (created_From == 'TrnfrOrd') {
+			shiptocontact = nlapiLookupField('location',salesOrderRecord.getFieldValue('transferlocation'),'custrecord_ship_to_contact_info');
+			} else {
+			shiptocontact = locationRecord.getFieldValue('custrecord_ship_to_contact_info')
+		}
+			//nlapiLogExecution('DEBUG', 'RMACompId', "xyz");
+			//shiptocontact = nlapiLookupField('location',salesOrderRecord.getFieldValue('transferlocation'),'custrecord_ship_to_contact_info');
+			html += '<div id="bill-to"><p>Ship To Contact:</p>' + '<br/>' + '<p>' + nullCheck(shiptocontact) + '</p></div>';
+			//html += '<div id="bill-to"><p>Ship To Contact:</p>' + '<br/>' + '<p>' + nullCheck(salesOrderRecord.getFieldValue('custbody_ship_to_contact')) + '</p></div>';
 		}
 		else
 		{
@@ -742,20 +815,37 @@ if(action=='russian_invoice')
 	html += '\
 	</div>\
 	<div id="third-row">';
-	var freightTerms = salesOrderRecord.getFieldText('custbody_custom_shipping_freight_terms');
-	nlapiLogExecution('DEBUG','freightTerms',freightTerms);
-	if(rectype=='itemfulfillment') freightTerms = nativeFulfillment.getFieldText('custbody_custom_shipping_freight_terms');
-	nlapiLogExecution('DEBUG','freightTerms',freightTerms);
+	// Get terms and ship method from native fulfillment. If empty, get from sales order
+	var freightTerms;
+	var fobTerms;
+	var shipMethod;
+	if (commerceFulfillment) {
+		freightTerms = commerceFulfillment.getFieldText('custbody_custom_shipping_freight_terms');
+		fobTerms = commerceFulfillment.getFieldText('custbody_po_fob');
+		shipMethod = commerceFulfillment.getFieldText('shipmethod');
+	}
+	
+	if (!freightTerms) {
+		freightTerms = salesOrderRecord.getFieldText('custbody_custom_shipping_freight_terms');
+	}
+	if (!fobTerms) {
+		fobTerms = salesOrderRecord.getFieldText('custbody_po_fob');
+	}
+	if (!shipMethod) {
+		shipMethod = salesOrderRecord.getFieldText('shipmethod');
+	}
+	nlapiLogExecution('DEBUG','freightTerms - fobTerms - shipMethod', freightTerms + ' - ' + fobTerms + ' - ' + shipMethod);
+	
 if(action=='russian_invoice')
 	{
 		html += '\
-		<div id="carriers"><p>Freight Carriers / Ã�Å¸Ã�ÂµÃ‘â‚¬Ã�ÂµÃ�Â²Ã�Â¾Ã�Â·Ã‘â€¡Ã�Â¸Ã�Âº: ' + salesOrderRecord.getFieldText('shipmethod') + '</p></div>\
-		<div id="terms"><p>Freight Terms / Ã�Â£Ã‘ï¿½Ã�Â»Ã�Â¾Ã�Â²Ã�Â¸Ã‘ï¿½ Ã�Â¿Ã�Â¾Ã‘ï¿½Ã‘â€šÃ�Â°Ã�Â²Ã�ÂºÃ�Â¸: ' + freightTerms + '</p><p>Order Number / Ã�ï¿½Ã�Â¾Ã�Â¼Ã�ÂµÃ‘â‚¬ Ã�Â·Ã�Â°Ã�ÂºÃ�Â°Ã�Â·Ã�Â° : ' + salesOrderRecord.getFieldValue('tranid') + '</p></div>';
+		<div id="carriers"><p>Freight Carriers / Ã�Å¸Ã�ÂµÃ‘â‚¬Ã�ÂµÃ�Â²Ã�Â¾Ã�Â·Ã‘â€¡Ã�Â¸Ã�Âº: ' + shipMethod + '</p></div>\
+		<div id="terms"><p>Freight Terms / Ã�Â£Ã‘ï¿½Ã�Â»Ã�Â¾Ã�Â²Ã�Â¸Ã‘ï¿½ Ã�Â¿Ã�Â¾Ã‘ï¿½Ã‘â€šÃ�Â°Ã�Â²Ã�ÂºÃ�Â¸: ' + freightTerms + '</p><p>FOB Terms: ' + fobTerms + '</p><p>Order Number / Ã�ï¿½Ã�Â¾Ã�Â¼Ã�ÂµÃ‘â‚¬ Ã�Â·Ã�Â°Ã�ÂºÃ�Â°Ã�Â·Ã�Â° : ' + salesOrderRecord.getFieldValue('tranid') + '</p></div>';
 	}	else
 	{
 		html += '\
-		<div id="carriers"><p>Freight Carriers: ' + salesOrderRecord.getFieldText('shipmethod') + '</p><p>EIN Number: '+ vatNumber +'</p></div>\
-		<div id="terms"><p>Freight Terms: ' + freightTerms + '</p></div>';
+		<div id="carriers"><p>Freight Carriers: ' + shipMethod + '</p><p>EIN Number: '+ vatNumber +'</p></div>\
+		<div id="terms"><p>Freight Terms: ' + freightTerms + '</p><p>FOB Terms: ' + fobTerms + '</p></div>';
 	}
 	html += '\
 	</div>\
@@ -852,48 +942,60 @@ if(action=='russian_invoice')
 	<br/>\
 	<div id="footer">'
 	var nldloc = '';
-if(orderType == RMA_SALES_ORDER_TYPE ){	
+if(orderType == RMA_SALES_ORDER_TYPE || orderType == INTERNAL_SALES_ORDER_TYPE){
 	var shipFromCountry = locationRecord.getFieldValue('country');
-	if(shipFromCountry == 'NL') {
+	/*if(shipFromCountry == 'NL') {
 		var shipToCountry = salesOrderRecord.getFieldValue('shipcountry');
 		nlapiLogExecution('DEBUG','ship from country',shipFromCountry);
-		nlapiLogExecution('DEBUG','ship to country',shipToCountry);	
-		var filters = new Array();	
+		nlapiLogExecution('DEBUG','ship to country',shipToCountry);
+		var filters = new Array();
 		filters.push(new nlobjSearchFilter('custrecord_look_up_country_code', '', 'is', shipToCountry));
 		var columns = new Array();
 		columns.push(new nlobjSearchColumn('custrecord_look_up_country_code'));
 		columns.push(new nlobjSearchColumn('custrecord_look_up_region'));
 		var searchLocRes = nlapiSearchRecord('customrecord_location_look_up',null,filters,columns);
 		if(searchLocRes) {
-			nlapiLogExecution('DEBUG','searchLocRes length',searchLocRes.length);		
+			nlapiLogExecution('DEBUG','searchLocRes length',searchLocRes.length);
 			var region = searchLocRes[0].getValue('custrecord_look_up_region');
 			nlapiLogExecution('DEBUG','region',region);
-			if(region == '2')
+			//if(region == '2')
 				//nldloc += '<br/><p><b>Please Note : </b>Ã¢â‚¬Å“Shipment is sent free of charge. Value for customs purposes only.Ã¢â‚¬ï¿½ </p>';
-			    nldloc += '<br/><p><b>Please Note : </b>Shipment is sent free of charge. Value for customs purposes only.</p>';
+				// NSTE-5547
+			    //nldloc += '<br/><p><b>Please Note : </b>Shipment is sent free of charge. Value for customs purposes only.</p>';
 		}
-	}	
+	}*/
+	nldloc += '<br/><p><b>Please Note : </b>Shipment is sent free of charge. Value for customs purposes only.</p>';
 	nlapiLogExecution('DEBUG','nldloc',nldloc);
 }
 if(action=='russian_invoice')
 	{
 		html += nldloc;
 		html += '			<br/><p>FREE OF CHARGE DELIVERY. THE PRICE IS MENTIONED ONLY FOR CUSTOMS PURPOSES.</p><br/>\
-		<p>I declare that all information contained in this Invoice is True and Correct. Ã�ï¿½Ã�Â°Ã‘ï¿½Ã‘â€šÃ�Â¾Ã‘ï¿½Ã‘â€°Ã�Â¸Ã�Â¼ Ã�Â¿Ã�Â¾Ã�Â´Ã‘â€šÃ�Â²Ã�ÂµÃ‘â‚¬Ã�Â¶Ã�Â´Ã�Â°Ã‘Å½, Ã‘â€¡Ã‘â€šÃ�Â¾ Ã�Â²Ã‘ï¿½Ã‘ï¿½ Ã�Â¸Ã�Â½Ã‘â€žÃ�Â¾Ã‘â‚¬Ã�Â¼Ã�Â°Ã‘â€ Ã�Â¸Ã‘ï¿½ Ã‘ï¿½Ã�Â¾Ã�Â´Ã�ÂµÃ‘â‚¬Ã�Â¶Ã�Â°Ã‘â€°Ã�Â°Ã‘ï¿½Ã‘ï¿½Ã‘ï¿½ Ã�Â² Ã‘ï¿½Ã‘â€šÃ�Â¾Ã�Â¼ Ã‘ï¿½Ã‘â€¡Ã�ÂµÃ‘â€šÃ�Âµ Ã�Â´Ã�Â¾Ã‘ï¿½Ã‘â€šÃ�Â¾Ã�Â²Ã�ÂµÃ‘â‚¬Ã�Â½Ã�Â° Ã�Â¸ Ã�ÂºÃ�Â¾Ã‘â‚¬Ã‘â‚¬Ã�ÂµÃ�ÂºÃ‘â€šÃ�Â½Ã�Â°.</p><br/>\
+		<p>I declare that all information contained in this Invoice is True and Correct. Ã�ï¿½Ã�Â°Ã‘ï¿½Ã‘â€šÃ�Â¾Ã‘ï¿½Ã‘â€°Ã�Â¸Ã�Â¼ Ã�Â¿Ã�Â¾Ã�Â´Ã‘â€šÃ�Â²Ã�ÂµÃ‘â‚¬Ã�Â¶Ã�Â´Ã�Â°Ã‘Å½, Ã‘â€¡Ã‘â€šÃ�Â¾ Ã�Â²Ã‘ï¿½Ã‘ï¿½ Ã�Â¸Ã�Â½Ã‘â€žÃ�Â¾Ã‘â‚¬Ã�Â¼Ã�Â°Ã‘â€ Ã�Â¸Ã‘ï¿½ Ã‘ï¿½Ã�Â¾Ã�Â´Ã�ÂµÃ‘â‚¬Ã�Â¶Ã�Â°Ã‘â€°Ã�Â°Ã‘ï¿½Ã‘ï¿½Ã‘ï¿½ Ã�Â² Ã‘ï¿½Ã‘â€šÃ�Â¾Ã�Â¼ Ã‘ï¿½Ã‘â€¡Ã�ÂµÃ‘â€šÃ�Âµ Ã�Â´Ã�Â¾Ã‘ï¿½Ã‘â€šÃ�Â¾Ã�Â²Ã�ÂµÃ‘â‚¬Ã�Â½Ã�Â° Ã�Â¸ Ã�ÂºÃ�Â¾Ã‘â‚¬Ã‘â‚¬Ã�ÂµÃ�ÂºÃ‘â€šÃ�Â½Ã�Â°.</p><br/>\
 		<p>Signature of Shipper/Exporter:_________________________________ Date: _________________</p></br>\
 		<p>Ã�Å¸Ã�Â¾Ã�Â´Ã�Â¿Ã�Â¸Ã‘ï¿½Ã‘Å’ Ã�Å¾Ã‘â€šÃ�Â¿Ã‘â‚¬Ã�Â°Ã�Â²Ã�Â¸Ã‘â€šÃ�ÂµÃ�Â»Ã‘ï¿½/Ã�Â­Ã�ÂºÃ‘ï¿½Ã�Â¿Ã�Â¾Ã‘â‚¬Ã‘â€šÃ�ÂµÃ‘â‚¬Ã�Â°:_________________________________ Ã�â€�Ã�Â°Ã‘â€šÃ�Â°: _________________</p></br>';
 	}
-	else{		
-		html += nldloc;				
+	else{
+		// Add Packing instructions if populated 
+		var packingInstr = salesOrderRecord.getFieldValue('custbody_packing_instructions');
+		if (packingInstr) {
+			packingInstr = '<b>Final Destination Country : </b>' + packingInstr + '<br/><br/>';
+		}
+		else {
+			packingInstr = '';
+		}
+		
+		// NSTE-5548
+		//		<br/><p><b>Please Note : </b>Shipment is sent free of charge. Value for customs purposes only.</p><br/>\
+		html += nldloc;		
 		html += '\
 		<br/>\
-		<br/><p>THESE COMMODITIES WERE EXPORTED FROM THE UNITED STATES IN ACCORDANCE WITH THE EXPORT ADMINISTRATION REGULATION.\
-		DIVERSION CONTRARY TO THE UNITED STATES LAW IS PROHIBITED.</p><br/>\
+		<br/><p>' + packingInstr + 'These items are controlled by the U.S. Government and authorized for export only to the country of ultimate destination for use by the ultimate consignee or end-user(s) herein identified. They may not be resold, transferred, or otherwise disposed of, to any other country or to any person other than the authorized ultimate consignee or end-user(s), either in their original form or after being incorporated into other items, without first obtaining approval from the U.S. government or as otherwise authorized by U.S. law and regulations.</p><br/>\
 		<p>Lifesize, Inc. has reviewed all available documentation and has determined that none of the cargo being offered in this\
 		consignment or consolidation either originated from, or transited through any point in Egypt, Syria, Somalia or Yemen.</p><br/>\
 		<p>I declare that all information contained in this Invoice is True and Correct.</p>\
 		<br/><p>Signature of Shipper/Exporter:_________________________________ Date: _________________</p></br>';
-	}	
+	}
 	html += '\
 	</div>\
 	</div>';
@@ -964,9 +1066,10 @@ function printInvoiceButton(type, invoiceForm){
 		// salesOrderRecord = nlapiLoadRecord('salesorder', salesorderid);
 		// subsidiary = salesOrderRecord.getFieldValue('subsidiary');
 		salesOrderForm = nlapiLookupField('salesorder', salesorderid, 'customform');
-
+nlapiLogExecution('debug', customerid, RUSSIAN_CUSTOMER)
 		// if the customer is 14293 AHLERS RUS
 		if (customerid == RUSSIAN_CUSTOMER) {
+		  nlapiLogExecution('debug', 'Russian customer', 'russian dcustomer');
 		  addInvoiceSuiteletButtons(russianInvoiceButton, invoiceForm);
 		}
 		else {
@@ -1021,7 +1124,7 @@ function nullCheck(val){
 
 function getShipFromAddrLine4(locId){
 var cols = new  nlobjSearchColumn('custrecord_addr4', 'address', null, 'label=Addr4', 'type=text');
-var filts = new nlobjSearchFilter('internalid', null,'is',locId); 
+var filts = new nlobjSearchFilter('internalid', null,'is',locId);
 var search = nlapiCreateSearch('location',filts,cols);
 var res = search.runSearch();
 var line4 = null;
@@ -1060,18 +1163,12 @@ var columns = new Array();
   columns.push(new nlobjSearchColumn('address1', 'address', null));
   columns.push(new nlobjSearchColumn('custrecord_addr4', 'address', null));
   columns.push(new nlobjSearchColumn('zipcode', 'address', null));
-
 var srch = nlapiSearchRecord('customer', null, filters, columns);
-
-
 if(srch != null)
 {
-
 return srch[0].getValue('custrecord_addr4','address');
 }
-
 }
-
 */
 }
 
